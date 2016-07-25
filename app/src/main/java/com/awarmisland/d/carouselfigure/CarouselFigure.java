@@ -1,6 +1,9 @@
 package com.awarmisland.d.carouselfigure;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -9,6 +12,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -28,8 +32,9 @@ public class CarouselFigure extends View {
     private long SLID_IMG_INTERVALS=10;//滑动时间间隔
     private float SLID_IMG_INTERVAL_OFFSET=40f;//滑动间隔偏移量
     private float ALLOW_SLID_IMG_OFFSET = 50f;//允许滑动图片偏移量
+    private Context mContext;
     private List<Bitmap> imgList;//图片集合
-    private Set<Integer> handleIndex;//记录处理图片集合
+    private Set<Integer> handleIndexSet;//记录处理图片集合
     private int showIndex,pre_show_index,next_show_index;//显示图片索引值
     private Paint mPaint; //画笔
     private int mWidth; //整体宽度
@@ -42,29 +47,32 @@ public class CarouselFigure extends View {
     private boolean isAutoSliding;//正在自动轮播
     private boolean isGestureSliding;//手势拨动滑动
     private boolean isNextCycle;//是否轮播下一个周期
+    private boolean isRefreshing;//是否正在刷新数据
 
     private OnTopImageClickListeners onTopImageClickListeners; //点击图片监听
 
     public CarouselFigure(Context context) {
         super(context);
-        init();
+        init(context);
     }
 
     public CarouselFigure(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init();
+        init(context);
     }
 
     public CarouselFigure(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        init();
+        init(context);
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        //获取view宽高
         mWidth = MeasureSpec.getSize(widthMeasureSpec);
         mHeight = MeasureSpec.getSize(heightMeasureSpec);
+        //默认showindex对应图片适配后宽高，做轮播图整体宽高
         if(imgList!=null && imgList.size()>0){
             Bitmap bitmap = imgList.get(showIndex);
             float scale = (float)mWidth / bitmap.getWidth();
@@ -112,26 +120,62 @@ public class CarouselFigure extends View {
         drawCycle(canvas);
     }
 
+    /**
+     * view加载完成
+     */
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        Log.i("KK","onAttachedToWindow");
+        //注册息屏，亮屏广播
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        mContext.registerReceiver(receiver,filter);
         //自动轮播图片
         autoSlidImg();
     }
 
     /**
+     * 进出后台  关闭开启轮播
+     * @param hasWindowFocus
+     */
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        Log.i("KK","onWindowFocusChanged");
+        if(hasWindowFocus){
+            isAllowAutoSlid=true;
+        }else{
+            isAllowAutoSlid=false;
+        }
+    }
+
+    /**
+     * 取消注册广播
+     */
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        Log.i("KK","onDetachedFromWindow");
+        mContext.unregisterReceiver(receiver);
+    }
+
+    /**
      * 初始化参数
      */
-    private void init(){
+    private void init(Context context){
+        mContext = context;
         mPaint = new Paint();
         imgList = new ArrayList<>();
-        handleIndex = new HashSet<>();
+        handleIndexSet = new HashSet<>();
         startPoint = new PointF();
         nowPoint = new PointF();
         isAllowAutoSlid = true;
         isAutoSliding=false;
         isGestureSliding =false;
         isNextCycle = true;
+        isRefreshing=false;
         //默认图片
         imgList.add(BitmapFactory.decodeResource(getResources(), R.drawable.test1));
     }
@@ -143,6 +187,8 @@ public class CarouselFigure extends View {
      */
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        //正在刷新禁止触摸
+        if(isRefreshing){return true;}
         //正在自动轮播时，不能触发
         if(isAutoSliding||isGestureSliding){return true;}
         int action = event.getAction();
@@ -212,7 +258,7 @@ public class CarouselFigure extends View {
             public void run() {
                 try {
                     while (true){
-                        Thread.sleep(4000);
+                        Thread.sleep(4000);//每4秒轮播一次
                         if(isAllowAutoSlid){
                             post(autoSlidImgRunnable);
                         }
@@ -291,11 +337,22 @@ public class CarouselFigure extends View {
     }
 
     /**
+     * 重置回归原始
+     */
+    private void reInitValue(){
+        offset=0;
+        old_offset=0;
+        isNextCycle = true;
+        isGestureSliding =false;
+        startPoint = new PointF();
+        handleIndexSet.clear();
+    }
+    /**
      * 处理图片适配屏幕问题
      * @param drawIndex
      */
     private void handleImgWnH(int drawIndex) {
-        if (!handleIndex.contains(drawIndex)) {
+        if (!handleIndexSet.contains(drawIndex)) {
             Bitmap img = imgList.get(drawIndex);
             Matrix matrix = new Matrix();
             float scale_w = (float)mWidth / img.getWidth();
@@ -303,7 +360,7 @@ public class CarouselFigure extends View {
             matrix.setScale(scale_w, scale_h);
             Bitmap bitmap = Bitmap.createBitmap(img, 0, 0, img.getWidth(), img.getHeight(), matrix, true);
             imgList.set(drawIndex, bitmap);
-            handleIndex.add(drawIndex);
+            handleIndexSet.add(drawIndex);
         }
     }
 
@@ -343,12 +400,30 @@ public class CarouselFigure extends View {
         pxValue=(int)(dpValue*scale+0.5f);
         return pxValue;
     }
+
+    /**
+     * 息屏，亮屏 广播
+     */
+    private BroadcastReceiver receiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if(action.equals(Intent.ACTION_SCREEN_ON)){
+                Log.i("KK","亮屏");
+                isAllowAutoSlid=true;
+            }else if(action.equals(Intent.ACTION_SCREEN_OFF)){
+                Log.i("KK","息屏");
+                isAllowAutoSlid=false;
+            }
+        }
+    };
     /**
      * 设置图片列表
      * @param imgList
      */
     public void setImgList(List<Bitmap> imgList){
-        this.imgList=imgList;
+        this.imgList.clear();
+        this.imgList.addAll(imgList);
     }
 
     /**
@@ -357,6 +432,20 @@ public class CarouselFigure extends View {
      */
     public void setShowIndex(int showIndex){
         this.showIndex = showIndex;
+    }
+
+    /**
+     * 刷新数据
+     */
+    public void refreshContent(){
+        //正在刷新
+        isRefreshing=true;
+        //禁止自动轮播
+        isAllowAutoSlid=false;
+        reInitValue();
+        isAllowAutoSlid=true;
+        isRefreshing=false;
+        invalidate();
     }
 
     /**
