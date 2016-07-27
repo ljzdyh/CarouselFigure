@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * 轮播图
@@ -32,6 +34,7 @@ public class CarouselFigure extends View {
     private long SLID_IMG_INTERVALS=10;//滑动时间间隔
     private float SLID_IMG_INTERVAL_OFFSET=40f;//滑动间隔偏移量
     private float ALLOW_SLID_IMG_OFFSET = 50f;//允许滑动图片偏移量
+    private long AUTO_SLID_IMG_TIME_PERIOD=4000l;//轮播周期
     private Context mContext;
     private List<Bitmap> imgList;//图片集合
     private Set<Integer> handleIndexSet;//记录处理图片集合
@@ -48,6 +51,7 @@ public class CarouselFigure extends View {
     private boolean isGestureSliding;//手势拨动滑动
     private boolean isNextCycle;//是否轮播下一个周期
     private boolean isRefreshing;//是否正在刷新数据
+    private Timer autoSlidImgTimer; //轮播定时器
 
     private OnTopImageClickListeners onTopImageClickListeners; //点击图片监听
 
@@ -159,6 +163,10 @@ public class CarouselFigure extends View {
         super.onDetachedFromWindow();
         Log.i("KK","onDetachedFromWindow");
         mContext.unregisterReceiver(receiver);
+        if(autoSlidImgTimer!=null){
+            autoSlidImgTimer.cancel();
+            autoSlidImgTimer=null;
+        }
     }
 
     /**
@@ -171,6 +179,7 @@ public class CarouselFigure extends View {
         handleIndexSet = new HashSet<>();
         startPoint = new PointF();
         nowPoint = new PointF();
+        autoSlidImgTimer = new Timer();
         isAllowAutoSlid = true;
         isAutoSliding=false;
         isGestureSliding =false;
@@ -253,20 +262,15 @@ public class CarouselFigure extends View {
      * 开启自动轮播
      */
     private void autoSlidImg()  {
-        new Thread(new Runnable() {
+        TimerTask task = new TimerTask() {
             @Override
             public void run() {
-                try {
-                    while (true){
-                        Thread.sleep(4000);//每4秒轮播一次
-                        if(isAllowAutoSlid){
-                            post(autoSlidImgRunnable);
-                        }
-                    }
-                }catch (Exception e ){
+                if(isAllowAutoSlid){
+                    post(autoSlidImgRunnable);
                 }
             }
-        }).start();
+        };
+        autoSlidImgTimer.schedule(task,AUTO_SLID_IMG_TIME_PERIOD,AUTO_SLID_IMG_TIME_PERIOD);
     }
 
     /**
