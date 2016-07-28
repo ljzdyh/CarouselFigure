@@ -15,6 +15,7 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     private Context context;
+    private int i = 0;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -22,7 +23,7 @@ public class MainActivity extends AppCompatActivity {
         context=this;
         final CarouselFigure carouselFigure = (CarouselFigure) findViewById(R.id.carouselFigure);
         Button btn_refresh = (Button) findViewById(R.id.btn_refresh);
-        List<Bitmap> imgList = new ArrayList<>();
+        final List<Bitmap> imgList = new ArrayList<>();
         final List<Bitmap> refresh_imgList = new ArrayList<>();
         imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test1));
         imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2));
@@ -31,11 +32,11 @@ public class MainActivity extends AppCompatActivity {
 
         //更换数据源
         refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_1));
-        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_2));
-        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_3));
-        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_4));
-        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_5));
-        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_6));
+//        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_2));
+//        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_3));
+//        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_4));
+//        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_5));
+//        refresh_imgList.add(BitmapFactory.decodeResource(getResources(),R.drawable.test2_6));
 
         carouselFigure.setImgList(imgList);
         carouselFigure.setShowIndex(0);
@@ -48,8 +49,12 @@ public class MainActivity extends AppCompatActivity {
         btn_refresh.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                carouselFigure.setShowIndex(5);
-                carouselFigure.setImgList(refresh_imgList);
+                if(i%2==0) {
+                    carouselFigure.setImgList(refresh_imgList);
+                }else{
+                    carouselFigure.setImgList(imgList);
+                }
+                i++;
                 carouselFigure.refreshContent();
             }
         });

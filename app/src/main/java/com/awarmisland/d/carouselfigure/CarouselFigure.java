@@ -83,6 +83,7 @@ public class CarouselFigure extends View {
             mHeight = (int) (scale * bitmap.getHeight());
         }
         setMeasuredDimension(mWidth,mHeight);
+
     }
 
     @Override
@@ -98,6 +99,11 @@ public class CarouselFigure extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        //只有一张图的时候
+        if(imgList.size()==1){
+            canvas.drawBitmap(imgList.get(0),0,0,mPaint);
+            return;
+        }
         //判断偏移之后在临界值
         float min_x = mWidth-Math.abs(offset);
         //小于临界值时，改变显示图片索引值
@@ -137,7 +143,9 @@ public class CarouselFigure extends View {
         filter.addAction(Intent.ACTION_SCREEN_OFF);
         mContext.registerReceiver(receiver,filter);
         //自动轮播图片
-        autoSlidImg();
+        if(imgList.size()>1) {
+            autoSlidImg();
+        }
     }
 
     /**
@@ -163,10 +171,6 @@ public class CarouselFigure extends View {
         super.onDetachedFromWindow();
         Log.i("KK","onDetachedFromWindow");
         mContext.unregisterReceiver(receiver);
-        if(autoSlidImgTimer!=null){
-            autoSlidImgTimer.cancel();
-            autoSlidImgTimer=null;
-        }
     }
 
     /**
@@ -200,14 +204,17 @@ public class CarouselFigure extends View {
         if(isRefreshing){return true;}
         //正在自动轮播时，不能触发
         if(isAutoSliding||isGestureSliding){return true;}
+        int count = imgList.size();
         int action = event.getAction();
         switch (action){
             case MotionEvent.ACTION_DOWN:
+                if(count==1){return  true;}//只有一张图片处理
                 //关闭自动轮播
                 isAllowAutoSlid = false;
                 startPoint.set(event.getX(),event.getY());//记录初始值
                 return true;
             case MotionEvent.ACTION_MOVE:
+                if(count==1){return  true;}//只有一张图片处理
                 float min_x = Math.abs(startPoint.x - event.getX());
                 float min_y = Math.abs(startPoint.y - event.getY());
                 //获取正切值
@@ -220,11 +227,13 @@ public class CarouselFigure extends View {
                 }
                 return true;
             case MotionEvent.ACTION_UP:
-                old_offset = offset;//记录上一次偏移量
-                //滑动手势产生图片切换效果
-                post(slidImgRunnable);
-                //重新开启自动轮播
-                isAllowAutoSlid = true;
+                if(count>1) {
+                    old_offset = offset;//记录上一次偏移量
+                    //滑动手势产生图片切换效果
+                    post(slidImgRunnable);
+                    //重新开启自动轮播
+                    isAllowAutoSlid = true;
+                }
                 if(offset==0) {
                     onTopImageClickListeners.onClick(showIndex);
                 }
@@ -262,6 +271,9 @@ public class CarouselFigure extends View {
      * 开启自动轮播
      */
     private void autoSlidImg()  {
+        if(autoSlidImgTimer==null){
+            autoSlidImgTimer=new Timer();
+        }
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
@@ -348,6 +360,7 @@ public class CarouselFigure extends View {
         old_offset=0;
         isNextCycle = true;
         isGestureSliding =false;
+        isAutoSliding=false;
         startPoint = new PointF();
         handleIndexSet.clear();
     }
@@ -428,6 +441,7 @@ public class CarouselFigure extends View {
     public void setImgList(List<Bitmap> imgList){
         this.imgList.clear();
         this.imgList.addAll(imgList);
+        showIndex=0;
     }
 
     /**
@@ -435,7 +449,11 @@ public class CarouselFigure extends View {
      * @param showIndex
      */
     public void setShowIndex(int showIndex){
-        this.showIndex = showIndex;
+        if(imgList.size()>showIndex&&showIndex>=0) {
+            this.showIndex = showIndex;
+        }else{
+            showIndex=0;
+        }
     }
 
     /**
@@ -446,8 +464,15 @@ public class CarouselFigure extends View {
         isRefreshing=true;
         //禁止自动轮播
         isAllowAutoSlid=false;
+        if(autoSlidImgTimer!=null) {
+            autoSlidImgTimer.cancel();
+            autoSlidImgTimer = null;
+        }
         reInitValue();
-        isAllowAutoSlid=true;
+        if(imgList.size()>1) {
+            isAllowAutoSlid = true;
+            autoSlidImg();
+        }
         isRefreshing=false;
         invalidate();
     }
@@ -456,7 +481,7 @@ public class CarouselFigure extends View {
      *定义点击接口
      */
     public interface OnTopImageClickListeners{
-         void onClick(int showIndex);
+        void onClick(int showIndex);
     }
 
     /**
