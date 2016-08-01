@@ -29,11 +29,12 @@ import java.util.TimerTask;
  */
 public class CarouselFigure extends View {
 
-    private float MIN_ANGLE_TAN_VALUE=0.2f; //横向手势最大可接受角度 正切值
+    private float MIN_ANGLE_TAN_VALUE=0.7f; //横向手势最大可接受角度 正切值 45°
     private float MIN_WIDTH_OFFSET_VALUE=0.2f; //宽度与偏移量的差值 临界值
     private long SLID_IMG_INTERVALS=10;//滑动时间间隔
     private float SLID_IMG_INTERVAL_OFFSET=40f;//滑动间隔偏移量
-    private float ALLOW_SLID_IMG_OFFSET = 50f;//允许滑动图片偏移量
+    private float SLID_IMG_RESET_INIERVAL_OFFSET=5F;//回归原点滑动间隔偏移量
+    private float ALLOW_SLID_IMG_OFFSET = 100f;//允许滑动图片偏移量
     private long AUTO_SLID_IMG_TIME_PERIOD=4000l;//轮播周期
     private Context mContext;
     private List<Bitmap> imgList;//图片集合
@@ -51,6 +52,7 @@ public class CarouselFigure extends View {
     private boolean isGestureSliding;//手势拨动滑动
     private boolean isNextCycle;//是否轮播下一个周期
     private boolean isRefreshing;//是否正在刷新数据
+    private boolean isFirstJudgeAngel;//手势滑动角度是否第一次判断
     private Timer autoSlidImgTimer; //轮播定时器
 
     private OnTopImageClickListeners onTopImageClickListeners; //点击图片监听
@@ -189,6 +191,7 @@ public class CarouselFigure extends View {
         isGestureSliding =false;
         isNextCycle = true;
         isRefreshing=false;
+        isFirstJudgeAngel=true;
         //默认图片
         imgList.add(BitmapFactory.decodeResource(getResources(), R.drawable.test1));
     }
@@ -217,9 +220,19 @@ public class CarouselFigure extends View {
                 if(count==1){return  true;}//只有一张图片处理
                 float min_x = Math.abs(startPoint.x - event.getX());
                 float min_y = Math.abs(startPoint.y - event.getY());
+                if(min_x==0||min_y==0){return true;}
                 //获取正切值
                 float angle_tan_value = min_y / min_x;
-                if(angle_tan_value<MIN_ANGLE_TAN_VALUE){ //横向滑动
+                //触摸后只判断一次手势滑动
+                if(isFirstJudgeAngel){
+                    if(angle_tan_value<MIN_ANGLE_TAN_VALUE) { //横向滑动
+                        isFirstJudgeAngel=false;
+                        min_x = event.getX() - startPoint.x ;
+                        offset = old_offset + min_x;
+                        nowPoint.set(event.getX(),event.getY());//记录当前坐标
+                        invalidate();
+                    }
+                }else{
                     min_x = event.getX() - startPoint.x ;
                     offset = old_offset + min_x;
                     nowPoint.set(event.getX(),event.getY());//记录当前坐标
@@ -233,6 +246,8 @@ public class CarouselFigure extends View {
                     post(slidImgRunnable);
                     //重新开启自动轮播
                     isAllowAutoSlid = true;
+                    //重新判断手势滑动角度
+                    isFirstJudgeAngel=true;
                 }
                 if(offset==0) {
                     onTopImageClickListeners.onClick(showIndex);
@@ -309,11 +324,13 @@ public class CarouselFigure extends View {
     private Runnable slidImgRunnable = new Runnable() {
         @Override
         public void run() {
+            //正在滑动
+            isGestureSliding = true;
             float abs_offset = Math.abs(offset);
             //向左移动
             if(offset<0) {
                 if(abs_offset<ALLOW_SLID_IMG_OFFSET){  //允许产生滑动的偏移量，否则图片回归原位置
-                    offset += SLID_IMG_INTERVAL_OFFSET;
+                    offset += SLID_IMG_RESET_INIERVAL_OFFSET;
                     if(offset>0){
                         reSetValue();
                     }
@@ -322,7 +339,7 @@ public class CarouselFigure extends View {
                 }
             }else if(offset>0){ //向右移动
                 if(abs_offset<ALLOW_SLID_IMG_OFFSET){ //允许产生滑动的偏移量，否则图片回归原位置
-                    offset += -SLID_IMG_INTERVAL_OFFSET;
+                    offset += -SLID_IMG_RESET_INIERVAL_OFFSET;
                     if(offset<0){
                         reSetValue();
                     }
@@ -335,7 +352,6 @@ public class CarouselFigure extends View {
                 isGestureSliding = false;
                 return;
             }
-            isGestureSliding = true;
             invalidate();
             postDelayed(slidImgRunnable,SLID_IMG_INTERVALS);
         }
@@ -481,7 +497,7 @@ public class CarouselFigure extends View {
      *定义点击接口
      */
     public interface OnTopImageClickListeners{
-        void onClick(int showIndex);
+         void onClick(int showIndex);
     }
 
     /**
